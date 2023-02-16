@@ -1,18 +1,18 @@
-From 6d2a50dd06bd7f05e367f044acc7c68b8da1e64b Mon Sep 17 00:00:00 2001
+From 3d7c6f46763f2434cc8096b7ee625a7e8ae9422e Mon Sep 17 00:00:00 2001
 From: Ph42oN <julle.ys.57@gmail.com>
-Date: Tue, 14 Feb 2023 00:12:13 +0200
+Date: Thu, 16 Feb 2023 13:16:30 +0200
 Subject: [PATCH] gplasync test
 
 ---
  meson.build                |   2 +-
- src/dxvk/dxvk_context.cpp  |  20 +++++-
+ src/dxvk/dxvk_context.cpp  |  20 ++++-
  src/dxvk/dxvk_context.h    |   4 +-
- src/dxvk/dxvk_graphics.cpp | 142 +++++++++++++++++++++----------------
+ src/dxvk/dxvk_graphics.cpp | 153 ++++++++++++++++++++++---------------
  src/dxvk/dxvk_graphics.h   |   9 ++-
- src/dxvk/dxvk_image.h      |  33 +++++++++
- src/dxvk/dxvk_options.cpp  |   8 +++
- src/dxvk/dxvk_options.h    |   4 ++
- 8 files changed, 156 insertions(+), 66 deletions(-)
+ src/dxvk/dxvk_image.h      |  33 ++++++++
+ src/dxvk/dxvk_options.cpp  |   8 ++
+ src/dxvk/dxvk_options.h    |   4 +
+ 8 files changed, 165 insertions(+), 68 deletions(-)
 
 diff --git a/meson.build b/meson.build
 index 2a576912..ecf8c826 100644
@@ -109,7 +109,7 @@ index 2da97d97..72c1e348 100644
        const DxvkGraphicsPipelineShaders&  shaders);
  
 diff --git a/src/dxvk/dxvk_graphics.cpp b/src/dxvk/dxvk_graphics.cpp
-index a6cba785..2571e5ba 100644
+index a6cba785..5d968a9c 100644
 --- a/src/dxvk/dxvk_graphics.cpp
 +++ b/src/dxvk/dxvk_graphics.cpp
 @@ -914,7 +914,8 @@ namespace dxvk {
@@ -122,7 +122,7 @@ index a6cba785..2571e5ba 100644
      DxvkGraphicsPipelineInstance* instance = this->findInstance(state);
  
      if (unlikely(!instance)) {
-@@ -922,30 +923,40 @@ namespace dxvk {
+@@ -922,30 +923,41 @@ namespace dxvk {
        if (!this->validatePipelineState(state, true))
          return std::make_pair(VK_NULL_HANDLE, DxvkGraphicsPipelineType::FastPipeline);
  
@@ -135,8 +135,7 @@ index a6cba785..2571e5ba 100644
 -        // a state cache worker and the current thread needs priority.
 -        bool canCreateBasePipeline = this->canCreateBasePipeline(state);
 -        instance = this->createInstance(state, canCreateBasePipeline);
-+	  bool useAsync = m_device->config().enableAsync && async;
- 
+-
 -        // Unlock here since we may dispatch the pipeline to a worker,
 -        // which will then acquire it to increment the use counter.
 -        lock.unlock();
@@ -144,54 +143,57 @@ index a6cba785..2571e5ba 100644
 -        // If necessary, compile an optimized pipeline variant
 -        if (!instance->fastHandle.load())
 -          m_workers->compileGraphicsPipeline(this, state, DxvkPipelinePriority::Low);
-+	  // Prevent other threads from adding new instances and check again
-+	  std::unique_lock<dxvk::mutex> lock(useAsync ? m_asyncMutex : m_mutex);
-+      instance = this->findInstance(state);
- 
+-
 -        // Only store pipelines in the state cache that cannot benefit
 -        // from pipeline libraries, or if that feature is disabled.
 -        if (!canCreateBasePipeline)
 -          this->writePipelineStateToCache(state);
 -      }
 -    }
-+	  if (!instance) {
-+		  if (useAsync) {
-+			  lock.unlock();
-+          std::thread asyncthread([=] { asyncPipeline(state,instance); });
-+			  asyncthread.detach();
-+			  return std::make_pair(VK_NULL_HANDLE, DxvkGraphicsPipelineType::FastPipeline);
-+		  } else {
++    bool useAsync = m_device->config().enableAsync && async;
 +
-+			  // Keep pipeline object locked, at worst we're going to stall
-+			  // a state cache worker and the current thread needs priority.
-+			  bool canCreateBasePipeline = this->canCreateBasePipeline(state);
-+			  instance = this->createInstance(state, canCreateBasePipeline);
++    // Prevent other threads from adding new instances and check again
++    std::unique_lock<dxvk::mutex> lock(m_mutex);
++    //std::unique_lock<dxvk::mutex> lock(useAsync ? m_asyncMutex : m_mutex);
++    instance = this->findInstance(state);
 +
-+			  // Unlock here since we may dispatch the pipeline to a worker,
-+			  // which will then acquire it to increment the use counter.
-+			  lock.unlock();
++    if (!instance) {
++      if (useAsync) {
++        lock.unlock();
++        std::thread asyncthread([=] { asyncPipeline(state,instance); });
++        asyncthread.detach();
++        return std::make_pair(VK_NULL_HANDLE, DxvkGraphicsPipelineType::FastPipeline);
++      } else {
 +
-+			  // If necessary, compile an optimized pipeline variant
-+			  if (!instance->fastHandle.load())
-+				  m_workers->compileGraphicsPipeline(this, state, DxvkPipelinePriority::Low);
++        // Keep pipeline object locked, at worst we're going to stall
++        // a state cache worker and the current thread needs priority.
++        bool canCreateBasePipeline = this->canCreateBasePipeline(state);
++        instance = this->createInstance(state, canCreateBasePipeline);
 +
-+			  // Only store pipelines in the state cache that cannot benefit
-+			  // from pipeline libraries, or if that feature is disabled.
-+			  if (!canCreateBasePipeline)
-+				  this->writePipelineStateToCache(state);
-+		  }
-+	  }
-+	}
++        // Unlock here since we may dispatch the pipeline to a worker,
++        // which will then acquire it to increment the use counter.
++        lock.unlock();
++
++        // If necessary, compile an optimized pipeline variant
++        if (!instance->fastHandle.load())
++          m_workers->compileGraphicsPipeline(this, state, DxvkPipelinePriority::Low);
++
++        // Only store pipelines in the state cache that cannot benefit
++        // from pipeline libraries, or if that feature is disabled.
++        if (!canCreateBasePipeline)
++          this->writePipelineStateToCache(state);
++      }
++    }
++  }
  
      // Find a pipeline handle to use. If no optimized pipeline has
      // been compiled yet, use the slower base pipeline instead.
-@@ -957,47 +968,58 @@ namespace dxvk {
+@@ -957,47 +969,64 @@ namespace dxvk {
      return std::make_pair(instance->baseHandle.load(), DxvkGraphicsPipelineType::BasePipeline);
    }
  
 +  void DxvkGraphicsPipeline::asyncPipeline(const DxvkGraphicsPipelineStateInfo &state, DxvkGraphicsPipelineInstance *instance) {
-+	  bool canCreateBasePipeline = this->canCreateBasePipeline(state);
-+	  instance = this->createInstance(state, canCreateBasePipeline);
++    std::unique_lock<dxvk::mutex> lock(m_asyncMutex);
  
 -  void DxvkGraphicsPipeline::compilePipeline(
 -    const DxvkGraphicsPipelineStateInfo& state) {
@@ -227,56 +229,63 @@ index a6cba785..2571e5ba 100644
 -
 -    VkPipeline pipeline = this->getOptimizedPipeline(state);
 -    instance->fastHandle.store(pipeline, std::memory_order_release);
-+	  // If necessary, compile an optimized pipeline variant
-+	  if (!instance->fastHandle.load())
-+		  m_workers->compileGraphicsPipeline(this, state, DxvkPipelinePriority::Low);
++    bool canCreateBasePipeline = this->canCreateBasePipeline(state);
++    instance = this->createInstance(state, canCreateBasePipeline);
  
 -    // Log pipeline state on error
 -    if (!pipeline)
 -      this->logPipelineState(LogLevel::Error, state);
-+	  // Only store pipelines in the state cache that cannot benefit
-+	  // from pipeline libraries, or if that feature is disabled.
-+	  if (!canCreateBasePipeline)
-+		  this->writePipelineStateToCache(state);
++    // Unlock here since we may dispatch the pipeline to a worker,
++    // which will then acquire it to increment the use counter.
++    lock.unlock();
++    
++    // If necessary, compile an optimized pipeline variant
++    if (!instance->fastHandle.load())
++      m_workers->compileGraphicsPipeline(this, state, DxvkPipelinePriority::Low);
++
++    // Only store pipelines in the state cache that cannot benefit
++    // from pipeline libraries, or if that feature is disabled.
++    if (!canCreateBasePipeline)
++      this->writePipelineStateToCache(state);
    }
  
 +  void DxvkGraphicsPipeline::compilePipeline(
-+	  const DxvkGraphicsPipelineStateInfo &state) {
-+	  if (m_device->config().enableGraphicsPipelineLibrary == Tristate::True)
-+		  return;
++    const DxvkGraphicsPipelineStateInfo &state) {
++    if (m_device->config().enableGraphicsPipelineLibrary == Tristate::True)
++      return;
 +
-+	  // Try to find an existing instance that contains a base pipeline
-+	  DxvkGraphicsPipelineInstance *instance = this->findInstance(state);
++    // Try to find an existing instance that contains a base pipeline
++    DxvkGraphicsPipelineInstance *instance = this->findInstance(state);
 +
-+	  if (!instance) {
-+		  // Exit early if the state vector is invalid
-+		  if (!this->validatePipelineState(state, false))
-+			  return;
++    if (!instance) {
++      // Exit early if the state vector is invalid
++      if (!this->validatePipelineState(state, false))
++        return;
 +
-+		  // Do not compile if this pipeline can be fast linked. This essentially
-+		  // disables the state cache for pipelines that do not benefit from it.
-+		  if (this->canCreateBasePipeline(state))
-+			  return;
++      // Do not compile if this pipeline can be fast linked. This essentially
++      // disables the state cache for pipelines that do not benefit from it.
++      if (this->canCreateBasePipeline(state))
++        return;
 +
-+		  // Prevent other threads from adding new instances and check again
-+		  std::unique_lock<dxvk::mutex> lock(m_mutex);
-+		  instance = this->findInstance(state);
++      // Prevent other threads from adding new instances and check again
++      std::unique_lock<dxvk::mutex> lock(m_mutex);
++      instance = this->findInstance(state);
 +
-+		  if (!instance)
-+			  instance = this->createInstance(state, false);
-+	  }
++      if (!instance)
++        instance = this->createInstance(state, false);
++    }
 +
-+	  // Exit if another thread is already compiling
-+	  // an optimized version of this pipeline
-+	  if (instance->isCompiling.load() || instance->isCompiling.exchange(VK_TRUE, std::memory_order_acquire))
-+		  return;
++    // Exit if another thread is already compiling
++    // an optimized version of this pipeline
++    if (instance->isCompiling.load() || instance->isCompiling.exchange(VK_TRUE, std::memory_order_acquire))
++      return;
 +
-+	  VkPipeline pipeline = this->getOptimizedPipeline(state);
-+	  instance->fastHandle.store(pipeline, std::memory_order_release);
++    VkPipeline pipeline = this->getOptimizedPipeline(state);
++    instance->fastHandle.store(pipeline, std::memory_order_release);
 +
-+	  // Log pipeline state on error
-+	  if (!pipeline)
-+		  this->logPipelineState(LogLevel::Error, state);
++    // Log pipeline state on error
++    if (!pipeline)
++      this->logPipelineState(LogLevel::Error, state);
 +  }
  
    void DxvkGraphicsPipeline::acquirePipeline() {
