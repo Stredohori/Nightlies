@@ -2,7 +2,7 @@
 https://github.com/Sporif/dxvk-async updated to work with newer dxvk versions and state cache 
 
 # Improvements
-- Compatible with dxvk 2.1
+- Compatible with dxvk 2.1 and 2.2
 - Async can be used at same time as graphics pipeline library.
 - DXVK state cache works with async and gpl.
 
