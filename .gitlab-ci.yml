@@ -11,14 +11,15 @@
 # can use versions as well, like gcc:5.2
 # see https://hub.docker.com/_/gcc/
 
-image: ubuntu:20.04
+image: archlinux:base-devel
 
 build:
   stage: build
   # instead of calling g++ directly you can also use some build toolkit like make
   # install the necessary build tools when needed
   before_script:
-    - apt update && apt -y install meson mingw-w64 glslang-tools build-essential git
+    - pacman -Syu --needed --noconfirm meson glslang git mingw-w64 base-devel
+  #  - apt update && apt -y install meson mingw-w64 glslang-tools build-essential git
   script:
     - bash -c ./build-gplasync.sh
   artifacts:
