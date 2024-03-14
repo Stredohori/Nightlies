@@ -11,11 +11,11 @@ I have not heard of any bans happening because of this but there is chance that 
 
 # Options
 Async is enabled with DXVK_ASYNC=1 environment variable or dxvk.enableAsync=true in dxvk.conf.
-State cache fixes are enabled using DXVK_GPLASYNCCACHE=1 environment variable or dxvk.gplAsyncCache=true.
+State cache fixes and and using it with GPL is enabled using DXVK_GPLASYNCCACHE=1 environment variable or dxvk.gplAsyncCache=true.
 I have added patch to support global dxvk.conf, it will first look for dxvk.conf normally, if not found it checks for /home/$USER/.config/dxvk.conf and %APPDATA%/dxvk.conf.
 
 # DXVK state cache
-I found way to use state cache while gpl is enabled. Pipelines are created first with gpl, then they are compiled without gpl in background and then they are written to cache. Starting with 2.2-3 release this is enabled using gplAsyncCache option. In 2.2-2 they are enabled always and that version does not work on all drivers.
+State cache can be used together with GPL that is not possible on upstream DXVK, but it can be useful depending on game. But i have found that using all GPL, async and gplAsyncCache, large state cache may cause stuttering, after my earlier state cache fixes this issue took months of playing to happen for me, and it was fixed by adding d3d11.cachedDynamicResources=vi in dxvk.conf.
 
 # About VRAM usage
 Graphics pipeline library can increase VRAM usage, due to this if you are low on VRAM, it can be better to disable it.  That can be done with option dxvk.enableGraphicsPipelineLibrary=false in dxvk.conf.
