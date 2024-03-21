@@ -304,10 +304,10 @@ index 47e24492..8023851b 100644
 +    else
 +      gplAsyncCache = config.getOption<bool>("dxvk.gplAsyncCache", false);
 +    
-+    if (env::getEnvVar("DXVK_ASYNC") == "1")
-+      enableAsync = true;
++    if (env::getEnvVar("DXVK_ASYNC") == "0")
++      enableAsync = false;
 +    else
-+      enableAsync = config.getOption<bool>("dxvk.enableAsync", false);
++      enableAsync = config.getOption<bool>("dxvk.enableAsync", true);
    }
  
  }
