@@ -1,7 +1,7 @@
-From fcc35246310ca077d8120b04b1c8cfd889142e1b Mon Sep 17 00:00:00 2001
+From 688d0424a8ab4028eb8f4ee7fb313e0e812f5fb0 Mon Sep 17 00:00:00 2001
 From: Ph42oN <julle.ys.57@gmail.com>
-Date: Thu, 21 Mar 2024 12:38:27 +0200
-Subject: [PATCH] release v2.3.1-1
+Date: Thu, 2 May 2024 12:13:42 +0300
+Subject: [PATCH] update for latest master
 
 ---
  meson.build                |  2 +-
@@ -15,7 +15,7 @@ Subject: [PATCH] release v2.3.1-1
  8 files changed, 109 insertions(+), 13 deletions(-)
 
 diff --git a/meson.build b/meson.build
-index e35a9de0..9483be3f 100644
+index 2a263735..912cda41 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -174,7 +174,7 @@ glsl_generator = generator(
@@ -28,10 +28,10 @@ index e35a9de0..9483be3f 100644
    output: 'version.h',
  )
 diff --git a/src/dxvk/dxvk_context.cpp b/src/dxvk/dxvk_context.cpp
-index dcaa7cb7..4a8f1ad3 100644
+index c63dce53..4f7d1761 100644
 --- a/src/dxvk/dxvk_context.cpp
 +++ b/src/dxvk/dxvk_context.cpp
-@@ -5045,7 +5045,8 @@ namespace dxvk {
+@@ -5089,7 +5089,8 @@ namespace dxvk {
        : DxvkContextFlag::GpDirtyRasterizerState);
  
      // Retrieve and bind actual Vulkan pipeline handle
@@ -41,7 +41,7 @@ index dcaa7cb7..4a8f1ad3 100644
  
      if (unlikely(!pipelineInfo.first))
        return false;
-@@ -5402,7 +5403,7 @@ namespace dxvk {
+@@ -5446,7 +5447,7 @@ namespace dxvk {
    }
  
  
@@ -50,7 +50,7 @@ index dcaa7cb7..4a8f1ad3 100644
      if (m_flags.test(DxvkContextFlag::GpDirtyFramebuffer)) {
        m_flags.clr(DxvkContextFlag::GpDirtyFramebuffer);
  
-@@ -5426,6 +5427,11 @@ namespace dxvk {
+@@ -5470,6 +5471,11 @@ namespace dxvk {
          m_state.gp.state.omSwizzle[i] = DxvkOmAttachmentSwizzle(mapping);
        }
  
@@ -62,7 +62,7 @@ index dcaa7cb7..4a8f1ad3 100644
        m_flags.set(DxvkContextFlag::GpDirtyPipelineState);
      }
    }
-@@ -5926,7 +5932,7 @@ namespace dxvk {
+@@ -5973,7 +5979,7 @@ namespace dxvk {
      }
      
      if (m_flags.test(DxvkContextFlag::GpDirtyFramebuffer))
@@ -71,7 +71,7 @@ index dcaa7cb7..4a8f1ad3 100644
  
      if (!m_flags.test(DxvkContextFlag::GpRenderPassBound))
        this->startRenderPass();
-@@ -6345,6 +6351,14 @@ namespace dxvk {
+@@ -6392,6 +6398,14 @@ namespace dxvk {
      return true;
    }
    
@@ -109,7 +109,7 @@ index 3b61d474..e8c0c2fe 100644
        const DxvkGraphicsPipelineShaders&  shaders);
  
 diff --git a/src/dxvk/dxvk_graphics.cpp b/src/dxvk/dxvk_graphics.cpp
-index 76df237d..2f6a241e 100644
+index 3092f350..8391b09c 100644
 --- a/src/dxvk/dxvk_graphics.cpp
 +++ b/src/dxvk/dxvk_graphics.cpp
 @@ -931,6 +931,7 @@ namespace dxvk {
@@ -196,10 +196,10 @@ index 76df237d..2f6a241e 100644
        baseHandle = this->getBasePipeline(state);
 +    else if(m_async && gplAsyncCache)
 +      baseHandle = this->getOptimizedPipeline(state);
-     else
-       fastHandle = this->getOptimizedPipeline(state);
  
-@@ -1279,6 +1301,8 @@ namespace dxvk {
+     // Fast-linking may fail in some situations
+     if (!baseHandle)
+@@ -1287,6 +1309,8 @@ namespace dxvk {
  
      if (handle)
        m_fastPipelines.insert({ key, handle });
@@ -209,10 +209,10 @@ index 76df237d..2f6a241e 100644
      return handle;
    }
 diff --git a/src/dxvk/dxvk_graphics.h b/src/dxvk/dxvk_graphics.h
-index 435677a8..43cbac26 100644
+index 4f618f78..dba7236d 100644
 --- a/src/dxvk/dxvk_graphics.h
 +++ b/src/dxvk/dxvk_graphics.h
-@@ -533,11 +533,14 @@ namespace dxvk {
+@@ -530,11 +530,14 @@ namespace dxvk {
       * Retrieves a pipeline handle for the given pipeline
       * state. If necessary, a new pipeline will be created.
       * \param [in] state Pipeline state vector
@@ -228,7 +228,7 @@ index 435677a8..43cbac26 100644
      /**
       * \brief Compiles a pipeline
       * 
-@@ -588,6 +591,10 @@ namespace dxvk {
+@@ -585,6 +588,10 @@ namespace dxvk {
  
      alignas(CACHE_LINE_SIZE)
      dxvk::mutex                                   m_mutex;
@@ -291,7 +291,7 @@ index 3a09302b..c9f7615d 100644
      
    };
 diff --git a/src/dxvk/dxvk_options.cpp b/src/dxvk/dxvk_options.cpp
-index 47e24492..8023851b 100644
+index 47e24492..459bc8e0 100644
 --- a/src/dxvk/dxvk_options.cpp
 +++ b/src/dxvk/dxvk_options.cpp
 @@ -13,6 +13,16 @@ namespace dxvk {
