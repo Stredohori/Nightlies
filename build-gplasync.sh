@@ -1,9 +1,6 @@
 #!/bin/bash
-git clone --branch v2.4 --recursive https://github.com/doitsujin/dxvk.git
-#update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
-#update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
-#update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
-#update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
+git clone --branch v2.4.1 --recursive https://github.com/doitsujin/dxvk.git
+
 cd dxvk
 patch -p1 < ../patches/dxvk-gplasync-2.4-1.patch
 patch -p1 < ../patches/global-dxvk.conf.patch
