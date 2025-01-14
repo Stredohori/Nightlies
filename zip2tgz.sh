@@ -9,4 +9,4 @@ rm -r dxvk-gplasync-v${dxvk}-${gpla}
 mv dxvk-gplasync-v${dxvk}-${gpla}.tar.gz releases/
 
 git add releases/dxvk-gplasync-v${dxvk}-${gpla}.tar.gz
-echo example: git commit -a -m "add gplasync v${dxvk}-${gpla} tar.gz"
+git commit -a -m "add gplasync v${dxvk}-${gpla} tar.gz"
