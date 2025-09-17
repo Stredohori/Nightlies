@@ -13,7 +13,7 @@ I have not heard of any bans happening because of this but there is chance that 
 
 # Options
 Async is enabled with DXVK_ASYNC=1 environment variable or dxvk.enableAsync=true in dxvk.conf.
-~~State cache fixes and and using it with GPL is enabled using DXVK_GPLASYNCCACHE=1 environment variable or dxvk.gplAsyncCache=true.~~ Remove in v2.7-1
+~~State cache fixes and and using it with GPL is enabled using DXVK_GPLASYNCCACHE=1 environment variable or dxvk.gplAsyncCache=true.~~ Removed in v2.7-1
 I have added patch to support global dxvk.conf, it will first look for dxvk.conf normally, if not found it checks for /home/$USER/.config/dxvk.conf and %APPDATA%/dxvk.conf.
 
 # About VRAM usage
