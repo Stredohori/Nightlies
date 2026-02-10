@@ -1,70 +1,68 @@
-name: Build FEXCore (ARM64EC)
+name: Fetch FEXCore Nightly (From Upstream)
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Runs daily at midnight
+  workflow_dispatch:      # Allows manual trigger
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04  # Updated to 22.04 to match the likely toolchain requirement
+  fetch-and-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to create releases if you add that later
+      actions: read   # Needed to download artifacts
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
-    - name: Install Dependencies
+    - name: Find and Download Latest Artifact
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake ninja-build build-essential wget tar
-
-    - name: Setup LLVM-MinGW Toolchain
-      run: |
-        # UPDATED: Changed version from 20240917 to 20250917 to support arm64ec
-        # If this fails, check https://github.com/mstorsjo/llvm-mingw/releases for the latest tag
-        wget https://github.com/mstorsjo/llvm-mingw/releases/download/20250917/llvm-mingw-20250917-ucrt-ubuntu-20.04-x86_64.tar.xz
-        tar -xf llvm-mingw-20250917-ucrt-ubuntu-20.04-x86_64.tar.xz
+        # 1. Find the latest successful run ID for the 'wine_dll_artifacts.yml' workflow on branch 'main'
+        # We filter for status=success and branch=main to ensure we get a good build.
+        RUN_ID=$(gh run list --repo FEX-Emu/FEX --workflow wine_dll_artifacts.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
         
-        # Add toolchain to PATH for subsequent steps
-        echo "$(pwd)/llvm-mingw-20250917-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
-
-    - name: Build libarm64ec.dll (ARM64EC)
-      run: |
-        mkdir build-arm64ec
-        cd build-arm64ec
-
-        # Configure for ARM64EC (Windows on ARM64)
-        # We explicitly set the C and CXX compilers to ensure CMake finds them in the new toolchain
-        cmake .. -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=../Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
-          -DCMAKE_INSTALL_PREFIX=./install \
-          -DENABLE_LTO=False \
-          -DBUILD_TESTING=False \
-          -DCMAKE_C_COMPILER=arm64ec-w64-mingw32-clang \
-          -DCMAKE_CXX_COMPILER=arm64ec-w64-mingw32-clang++
-
-        ninja
+        echo "Found latest successful run ID: $RUN_ID"
         
-        # Note: The output filename in FEX source is usually libarm64ecfex.dll
-        # We will rename it during packaging to match your 'libarm64ec.dll'
+        # 2. Download the 'wine-dll-artifacts' from that run
+        gh run download $RUN_ID --repo FEX-Emu/FEX --name wine-dll-artifacts --dir downloaded_artifacts
 
-    - name: Prepare Artifacts
+    - name: Repackage DLLs
       run: |
-        mkdir artifacts
-        # Find the built DLL. The name might vary slightly depending on CMake config, 
-        # so we find it by extension in the build directory.
-        find build-arm64ec -name "*.dll" -exec cp {} artifacts/libarm64ec.dll \;
+        # Create your specific directory structure
+        mkdir -p packaging/system32
+        
+        # Copy and RENAME the files as per your previous request
+        # FEX upstream names them 'libarm64ecfex.dll', you wanted 'libarm64ec.dll'
+        cp downloaded_artifacts/libarm64ecfex.dll packaging/system32/libarm64ec.dll
+        cp downloaded_artifacts/libwow64fex.dll packaging/system32/libwow64fex.dll
 
-    - name: Upload Artifacts
+    - name: Create profile.json
+      run: |
+        # Generate dynamic variables for the JSON
+        BUILD_DATE=$(date +'%Y-%m-%d')
+        # We use the current repo's run number for version code, or you can fetch the upstream commit hash if preferred
+        VERSION_CODE=${{ github.run_number }}
+        
+        # Create the JSON file
+        cat <<EOF > packaging/profile.json
+        {
+          "type": "FEXCore",
+          "versionName": "Nightly-${BUILD_DATE}",
+          "versionCode": ${VERSION_CODE},
+          "description": "FEXCore Nightly (Upstream Artifacts)\nDate: ${BUILD_DATE}",
+          "author": "The412Banner",
+          "files": [
+            { "source": "system32/libarm64ec.dll", "target": "\${system32}/libarm64ec.dll" },
+            { "source": "system32/libwow64fex.dll", "target": "\${system32}/libwow64fex.dll" }
+          ]
+        }
+        EOF
+
+    - name: Upload Repackaged Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: fex-arm64ec
-        path: artifacts/
+        name: fex-nightly-package
+        path: packaging/
