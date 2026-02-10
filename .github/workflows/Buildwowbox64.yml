@@ -1,0 +1,70 @@
+name: Build WowBox64 Nightly
+
+on:
+  schedule:
+    - cron: '30 2 * * *' # Runs at 2:30 AM (after the main Box64 build)
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm # Native ARM64 runner for speed and compatibility
+    
+    strategy:
+      matrix:
+        include:
+          - platform: "RK3588"
+            flags: "-DRK3588=1"
+          - platform: "SD845"
+            flags: "-DSD845=1"
+          - platform: "GENERIC_ARM64"
+            flags: "-DARM64=1"
+
+    steps:
+    - name: Checkout Box64
+      uses: actions/checkout@v4
+      with:
+        repository: ptitSeb/box64
+        path: box64
+        fetch-depth: 0
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build build-essential
+
+    - name: Configure and Build WowBox64
+      run: |
+        mkdir build && cd build
+        # The -DWOWBOX64=1 flag is the key "perk" here
+        cmake ../box64 ${{ matrix.flags }} -DWOWBOX64=1 -DCMAKE_BUILD_TYPE=Release -G Ninja
+        ninja
+
+    - name: Prepare Package
+      run: |
+        cd box64
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +'%Y-%m-%d')
+        cd ..
+
+        mkdir -p packaging/usr/local/lib/wine/x86_64-unix
+        # The build produces wowbox64.dll.so or wowbox64.dll
+        cp build/wowbox64.dll* packaging/usr/local/lib/wine/x86_64-unix/
+
+        cat <<EOF > packaging/profile.json
+        {
+          "type": "WowBox64",
+          "variant": "${{ matrix.platform }}",
+          "versionName": "wow-nightly-${COMMIT_HASH}",
+          "versionCode": ${{ github.run_number }},
+          "description": "WowBox64 (WOW64 DLL) for ${{ matrix.platform }}\nCommit: ${COMMIT_HASH}",
+          "author": "Blank"
+        }
+        EOF
+
+        tar -cJf "wowbox64-${{ matrix.platform }}-${COMMIT_HASH}.wcp" -C packaging .
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: wowbox64-${{ matrix.platform }}-nightly
+        path: "*.wcp"
