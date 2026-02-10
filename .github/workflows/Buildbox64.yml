@@ -1,4 +1,4 @@
-name: Build Box64
+name: Build Box64 Nightly
 
 on:
   schedule:
