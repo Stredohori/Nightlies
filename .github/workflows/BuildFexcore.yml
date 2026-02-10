@@ -1,52 +1,92 @@
-name: Build Official FEX Wine DLLs
+name: Build FEXCore Nightly
 
 on:
+  schedule:
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
-  build-dlls:
-    # Using GitHub's native ARM64 runner for speed
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+  build:
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Official FEX
+    - name: Checkout FEX
       uses: actions/checkout@v4
       with:
         repository: FEX-Emu/FEX
         submodules: recursive
-        fetch-depth: 1
+        fetch-depth: 0
 
-    - name: Install Dependencies
+    - name: Install Dependencies (Cross-Compile)
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build clang llvm lld mingw-w64
+        # Install CMake, Ninja, and the ARM64 cross-compilers
+        sudo apt-get install -y cmake ninja-build \
+          gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+          libstdc++-12-dev-arm64-cross
 
-    - name: Build WOW64 DLL
+    - name: Configure CMake (ARM64)
       run: |
-        mkdir build && cd build
-        # We use the internal FEX toolchain for MinGW
-        cmake .. -GNinja \
+        mkdir build
+        cd build
+        
+        # We must tell CMake we are cross-compiling for Linux AArch64
+        cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_TOOLCHAIN_FILE=Data/CMake/toolchain_mingw.cmake \
-          -DMINGW_TRIPLE=aarch64-w64-mingw32 \
-          -DENABLE_LTO=False \
-          -DBUILD_TESTING=False
-        ninja wowbox64.dll
+          -DCMAKE_SYSTEM_NAME=Linux \
+          -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+          -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+          -DENABLE_LTO=True \
+          -DBUILD_TESTING=False \
+          -DENABLE_ASSERTIONS=False
 
-    - name: Package for Winlator (.wcp)
+    - name: Build FEX
       run: |
-        COMMIT=$(git rev-parse --short HEAD)
-        mkdir -p pkg/system32
-        # Find the newly built DLL and move it to the package folder
-        find build -name "wowbox64.dll" -exec cp {} pkg/system32/ \;
-        
-        echo "{\"type\": \"WOWBox64\", \"versionName\": \"fex-dll-${COMMIT}\", \"versionCode\": ${{ github.run_number }}, \"description\": \"Official FEX WOW64 DLL\", \"files\": [{\"source\": \"system32/wowbox64.dll\", \"target\": \"\${system32}/wowbox64.dll\"}]}" > pkg/profile.json
-        
-        tar -cJf "FEX-WOW64-Nightly.wcp" -C pkg .
+        cd build
+        ninja
 
-    - name: Upload Artifact
+    - name: Prepare Package
+      run: |
+        # 1. Capture Commit Hash and Date
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +'%Y-%m-%d')
+
+        # 2. Create Packaging Structure
+        # Winlator FEX packages usually place the main binary (FEXLoader) and libraries
+        mkdir -p packaging/usr/bin
+        mkdir -p packaging/usr/lib/fex-emu
+        
+        # Copy the main binaries (Adjust if your specific FEXCore wcp uses different paths)
+        cp build/Bin/FEXLoader packaging/usr/bin/
+        cp build/Bin/FEXInterpreter packaging/usr/bin/
+        # Copy libraries if they exist (FEXCore is often static, but if shared:)
+        # cp build/lib/* packaging/usr/lib/fex-emu/ || true
+
+        # 3. Create profile.json
+        cat <<EOF > packaging/profile.json
+        {
+          "type": "FEXCore",
+          "versionName": "Nightly-${COMMIT_HASH}",
+          "versionCode": ${{ github.run_number }},
+          "description": "FEX-Emu Nightly Build\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "author": "Blank",
+          "files": [
+            { "source": "usr/bin/FEXLoader", "target": "/usr/bin/FEXLoader" },
+            { "source": "usr/bin/FEXInterpreter", "target": "/usr/bin/FEXInterpreter" }
+          ]
+        }
+        EOF
+
+    - name: Create WCP Package
+      run: |
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        # Create the .wcp (which is just a tar.xz)
+        tar -cJf FEXCore-Nightly-${COMMIT_HASH}.wcp -C packaging .
+
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: fex-wine-dll
-        path: "*.wcp"
+        name: fexcore-nightly-build
+        path: |
+          *.wcp
