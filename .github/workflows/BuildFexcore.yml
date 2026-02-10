@@ -1,59 +1,60 @@
-name: Build FEXCore Nightly
+name: Build FEXCore Native Nightly
 
 on:
   schedule:
-    - cron: '0 3 * * *' # Runs at 3 AM daily
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm # Native ARM64 runner is required for FEX
+    runs-on: ubuntu-24.04-arm # Native ARM64 runner is 10x faster for this
     
     steps:
-    - name: Checkout FEX-Emu
+    - name: Checkout FEX
       uses: actions/checkout@v4
       with:
         repository: FEX-Emu/FEX
         path: fex
-        submodules: recursive # FEX heavily relies on submodules
+        submodules: recursive
         fetch-depth: 0
 
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake ninja-build clang llvm lld libssl-dev python3-setuptools
+        # Standard native dependencies including Qt6 for FEXConfig
+        sudo apt-get install -y cmake ninja-build clang llvm lld libssl-dev \
+          python3-setuptools qt6-base-dev qt6-declarative-dev libsdl2-dev
 
     - name: Configure and Build
       run: |
         mkdir build && cd build
-        # We use Clang and LLD for the fastest emulation performance
+        # We build for 'Host' (Linux Native) instead of cross-compiling
         CC=clang CXX=clang++ cmake ../fex \
           -DCMAKE_BUILD_TYPE=Release \
           -DUSE_LINKER=lld \
           -DENABLE_LTO=True \
           -DBUILD_TESTING=False \
           -G Ninja
-        ninja FEXInterpreter FEXLoader FEXServer
+        ninja FEXInterpreter FEXLoader FEXServer FEXConfig
 
     - name: Prepare Package
       run: |
-        cd fex
-        COMMIT_HASH=$(git rev-parse --short HEAD)
+        COMMIT_HASH=$(git -C fex rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y-%m-%d')
-        cd ..
 
-        # Create Winlator-style structure
         mkdir -p packaging/usr/local/bin
+        # Copy the main native Linux tools
         cp build/Source/Tools/FEXInterpreter/FEXInterpreter packaging/usr/local/bin/
         cp build/Source/Tools/FEXLoader/FEXLoader packaging/usr/local/bin/
         cp build/Source/Tools/FEXServer/FEXServer packaging/usr/local/bin/
+        cp build/Source/Tools/FEXConfig/FEXConfig packaging/usr/local/bin/
 
         cat <<EOF > packaging/profile.json
         {
-          "type": "FEXCore",
-          "versionName": "fex-nightly-${COMMIT_HASH}",
+          "type": "FEXCore-Native",
+          "versionName": "fex-native-${COMMIT_HASH}",
           "versionCode": ${{ github.run_number }},
-          "description": "FEXCore Nightly Build\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
+          "description": "FEXCore Native Linux ARM64\nCommit: ${COMMIT_HASH}\nDate: ${BUILD_DATE}",
           "author": "Blank",
           "files": [
             { "source": "usr/local/bin/FEXInterpreter", "target": "/usr/local/bin/FEXInterpreter" }
@@ -61,11 +62,10 @@ jobs:
         }
         EOF
 
-        tar -cJf "fexcore-nightly-${COMMIT_HASH}.wcp" -C packaging .
+        tar -cJf "fex-native-${COMMIT_HASH}.wcp" -C packaging .
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: fexcore-nightly
+        name: fex-native-nightly
         path: "*.wcp"
-        
