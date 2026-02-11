@@ -1,0 +1,51 @@
+name: Wine DLL artifacts
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  wine_dll_artifacts:
+    # Changed from self-hosted to GitHub-hosted Ubuntu
+    runs-on: ubuntu-latest 
+    
+    steps:
+    - [span_0](start_span)uses: actions/checkout@v4 #[span_0](end_span)
+
+    - name: Install LLVM-MinGW
+      run: |
+        wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240619/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-*.tar.xz
+        echo "$GITHUB_WORKSPACE/llvm-mingw-20240619-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
+
+    - name: Checkout Submodules
+      run: |
+        [span_1](start_span)git submodule sync --recursive #[span_1](end_span)
+        [span_2](start_span)git submodule update --init --depth 1 #[span_2](end_span)
+
+    - name: Clean install directory
+      run: rm -Rf install
+
+    - name: Build (wow64)
+      uses: ./.github/workflows/wine_build
+      with:
+        target: wow64
+
+    - name: Build (arm64ec)
+      uses: ./.github/workflows/wine_build
+      with:
+        target: arm64ec
+
+    - name: Upload libraries
+      [span_3](start_span)uses: actions/upload-artifact@v4 #[span_3](end_span)
+      timeout-minutes: 5 # Increased as cloud runners might be slower
+      with:
+        overwrite: true
+        name: wine_dll_artifacts
+        [span_4](start_span)path: ${{ github.workspace }}/install/usr/lib/wine/aarch64-windows/lib*.dll #[span_4](end_span)
+        retention-days: 60
+        compression-level: 9
