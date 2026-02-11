@@ -28,7 +28,7 @@ jobs:
         mkdir build-arm64ec
         cd build-arm64ec
         
-        # FIX: Added -D_M_ARM64=1 to force MinGW headers to use the correct CONTEXT struct
+        # FIX 1: Force define _M_ARM64 so Windows headers give us the correct struct
         cmake .. -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
@@ -40,8 +40,8 @@ jobs:
           -DCMAKE_C_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_CXX_COMPILER_TARGET="aarch64-w64-mingw32" \
           -DCMAKE_ASM_COMPILER_TARGET="aarch64-w64-mingw32" \
-          -DCMAKE_C_FLAGS="-fuse-ld=lld -D_M_ARM64=1 -D__aarch64__=1" \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld -D_M_ARM64=1 -D__aarch64__=1" \
+          -DCMAKE_C_FLAGS="-fuse-ld=lld -D_M_ARM64=1" \
+          -DCMAKE_CXX_FLAGS="-fuse-ld=lld -D_M_ARM64=1" \
           -DCMAKE_ASM_FLAGS="-target aarch64-w64-mingw32" \
           -DCMAKE_INSTALL_PREFIX=./install \
           -DENABLE_LTO=False \
@@ -83,18 +83,27 @@ jobs:
         
         mkdir -p packaging/system32
         
-        # Attempt to copy the DLL. 
-        # Standard build might produce "libFEXCore.dll", but we rename it to "libarm64ec.dll" for Winlator.
+        # FIX 2: Smart file finding.
+        # Native AArch64 builds usually output "libFEXCore.dll", not "libarm64ecfex.dll".
+        # We find whatever dll was built and rename it to libarm64ec.dll for Winlator compatibility.
+        
+        echo "Searching for built DLLs..."
+        find build-arm64ec -name "*.dll"
+        
         if [ -f "build-arm64ec/Bin/libFEXCore.dll" ]; then
-          cp build-arm64ec/Bin/libFEXCore.dll packaging/system32/libarm64ec.dll
+            echo "Found libFEXCore.dll, renaming..."
+            cp build-arm64ec/Bin/libFEXCore.dll packaging/system32/libarm64ec.dll
         elif [ -f "build-arm64ec/libarm64ecfex.dll" ]; then
-          find build-arm64ec -name "libarm64ecfex.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
+            echo "Found libarm64ecfex.dll..."
+            cp build-arm64ec/libarm64ecfex.dll packaging/system32/libarm64ec.dll
         else
-           # Fallback search
-           find build-arm64ec -name "*.dll" -exec cp {} packaging/system32/libarm64ec.dll \;
+            echo "Using fallback search..."
+            # Find the largest DLL in the build dir, assuming it's the core library
+            find build-arm64ec -name "*.dll" -type f -exec ls -s {} + | sort -n -r | head -1 | awk '{print $2}' | xargs -I {} cp {} packaging/system32/libarm64ec.dll
         fi
 
-        find build-wow64 -name "libwow64fex.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
+        # Copy WOW64 DLL
+        find build-wow64 -name "*.dll" -exec cp {} packaging/system32/libwow64fex.dll \;
         
         cat <<EOF > packaging/profile.json
         {
