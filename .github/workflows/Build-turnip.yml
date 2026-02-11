@@ -1,0 +1,106 @@
+name: Build Turnip+Zink for Winlator
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-winlator-driver:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+
+    steps:
+      - name: Install Dependencies
+        run: |
+          apt-get update
+          apt-get install -y git python3 python3-pip meson ninja-build \
+          bison flex libelf-dev pkg-config wget unzip zip
+
+      - name: Setup Android NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
+          unzip -q android-ndk-r26b-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
+          echo "PATH=$PWD/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Checkout Mesa
+        uses: actions/checkout@v4
+        with:
+          repository: mesa3d/mesa
+          ref: main 
+          path: mesa
+
+      - name: Create Meson Cross File
+        run: |
+          cat <<EOF > android-aarch64
+          [binaries]
+          c = '$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang'
+          cpp = '$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++'
+          ar = '$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar'
+          strip = '$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip'
+          pkgconfig = '/usr/bin/pkg-config'
+          
+          [host_machine]
+          system = 'android'
+          cpu_family = 'aarch64'
+          cpu = 'armv8-a'
+          endian = 'little'
+          EOF
+
+      - name: Configure Build (Turnip + Zink)
+        working-directory: mesa
+        run: |
+          pip3 install mako
+          
+          # We enable 'freedreno' (Turnip) for Vulkan
+          # We enable 'zink' for Gallium (OpenGL)
+          meson setup build-android \
+            --cross-file ../android-aarch64 \
+            -Dbuildtype=release \
+            -Dplatforms=android \
+            -Dplatform-sdk-version=29 \
+            -Dandroid-stub=true \
+            -Dgallium-drivers=zink \
+            -Dvulkan-drivers=freedreno \
+            -Dfreedreno-kmds=kgsl \
+            -Dllvm=disabled \
+            -Dglx=disabled \
+            -Degl=disabled \
+            -Dgbm=disabled \
+            -Dglvnd=false
+
+      - name: Compile
+        working-directory: mesa
+        run: ninja -C build-android
+
+      - name: Package for Winlator
+        working-directory: mesa/build-android
+        run: |
+          mkdir -p WinlatorPackage
+          
+          # 1. Copy the Vulkan Driver (Turnip)
+          cp src/freedreno/vulkan/libvulkan_freedreno.so WinlatorPackage/
+          
+          # 2. Copy the OpenGL Driver (Zink)
+          # Note: Some Winlator versions look for 'libgallium_dri.so'
+          cp src/gallium/targets/dri/libgallium_dri.so WinlatorPackage/
+
+          # 3. Create meta.json (Required for Import)
+          # You can customize the name/description
+          echo '{
+            "name": "Turnip (Custom CI)",
+            "version": "Mesa-Main",
+            "description": "Adreno 7xx Turnip + Zink built via GitHub Actions",
+            "author": "Self",
+            "api_version": 1
+          }' > WinlatorPackage/meta.json
+
+          # 4. Zip it up
+          cd WinlatorPackage
+          zip -r ../Turnip-Winlator-Driver.zip .
+
+      - name: Upload Driver
+        uses: actions/upload-artifact@v4
+        with:
+          name: Winlator-Turnip-Driver
+          path: mesa/build-android/Turnip-Winlator-Driver.zip
