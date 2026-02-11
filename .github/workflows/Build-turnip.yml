@@ -23,11 +23,10 @@ jobs:
           echo "ANDROID_NDK_HOME=$PWD/android-ndk-r26b" >> $GITHUB_ENV
           echo "PATH=$PWD/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH" >> $GITHUB_ENV
 
-      # --- CHANGED: Clone from GitLab Upstream ---
+      # --- CRITICAL FIX: MANUAL CLONE FROM GITLAB ---
       - name: Clone Mesa from GitLab
         run: |
-          # Cloning directly from Freedesktop GitLab
-          # --depth 1 saves time by not downloading the full history
+          # We use git clone directly to bypass GitHub permission errors
           git clone --depth 1 --branch main https://gitlab.freedesktop.org/mesa/mesa.git mesa
 
       - name: Create Meson Cross File
@@ -52,6 +51,7 @@ jobs:
         run: |
           pip3 install mako
           
+          # Configure Meson for Turnip (Vulkan) and Zink (OpenGL)
           meson setup build-android \
             --cross-file ../android-aarch64 \
             -Dbuildtype=release \
@@ -87,7 +87,7 @@ jobs:
           echo '{
             "name": "Turnip (GitLab Upstream)",
             "version": "Mesa-Main",
-            "description": "Adreno 7xx Turnip + Zink built from Freedesktop.org",
+            "description": "Adreno 7xx Turnip + Zink built from GitLab",
             "author": "The412Banner",
             "api_version": 1
           }' > WinlatorPackage/meta.json
