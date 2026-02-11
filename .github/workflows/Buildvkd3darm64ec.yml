@@ -1,11 +1,11 @@
-name: d3d-vkd3d-arm64ec-hosted
+name: d3d-vkd3d-arm64ec-force-build
 
 on:
   workflow_dispatch:
     inputs:
       version:
         type: string
-        description: "(v2.14.1, v3.0a) Empty = Latest"
+        description: "(v2.14.1, v3.0a) Empty = Latest Stable from Upstream"
   schedule:
     - cron: "0 17 * * *"
 
@@ -25,15 +25,13 @@ env:
 jobs:
   build:
     name: Build & Pack
-    # This force-uses GitHub's hosted runners
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # Increased to the 6-hour maximum
-    
+    timeout-minutes: 360
+
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
         with:
-          # This frees up ~30GB of space
           tool-cache: true
           android: true
           dotnet: true
@@ -46,66 +44,59 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build Guard
-        id: check
-        run: |
-          # Ensure scripts are executable
-          chmod +x ./scripts/*.sh
-          # Set input version if manually triggered
-          export IN_VERSION="${{ github.event.inputs.version }}"
-          bash ./scripts/guard.sh
-          # Note: guard.sh must set 'missing' and 'list' outputs for the next steps
-
       - name: Install Deps
-        if: steps.check.outputs.missing == 'true'
-        run: bash ./scripts/install-deps-ubuntu.sh
+        run: |
+          chmod +x ./scripts/*.sh
+          bash ./scripts/install-deps-ubuntu.sh
 
       - name: Setup Build Env (Meson + llvm-mingw)
-        if: steps.check.outputs.missing == 'true'
         run: bash ./scripts/setup-llvm-meson.sh
 
       - name: Clone Source
-        if: steps.check.outputs.missing == 'true'
         run: |
           git clone "https://github.com/$UPSTREAM_REPO.git" src
           git -C src config user.name "Builder"
           git -C src config user.email "bot@noreply"
 
-      - name: Build Loop
-        if: steps.check.outputs.missing == 'true'
-        env:
-          TO_BUILD: ${{ steps.check.outputs.list }}
+      - name: Build Latest/Specified Version
         run: |
           mkdir -p _logs out src/out
           cd src
           git fetch --tags --force
+          
+          # Determine which version to build
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            REF="${{ github.event.inputs.version }}"
+            VER_NAME="${{ github.event.inputs.version }}"
+          else
+            # Grab the latest tag from the upstream repository
+            REF=$(git describe --tags $(git rev-list --tags --max-count=1))
+            VER_NAME="$REF"
+          fi
+          
+          FILENAME="${UNI_KIND}-${VER_NAME}.wcp"
+          LOG_PATH="../_logs/${UNI_KIND}-${VER_NAME}-build.log"
 
-          while IFS='|' read -r kind channel ref ver_name rel_tag filename short; do
-            [[ -n "$kind" ]] || continue
-            LOG_PATH="../_logs/${UNI_KIND}-${ver_name}-build.log"
-            echo "::group::Building ${ref} (${ver_name})"
-            
-            git reset --hard
-            git clean -fdx
-            git checkout -f "$ref"
-            git submodule update --init --recursive
+          echo "::group::Building ${REF}"
+          
+          git reset --hard
+          git clean -fdx
+          git checkout -f "$REF"
+          git submodule update --init --recursive
 
-            # The actual compilation script
-            bash ../scripts/guts-arm64ec.sh "$ref" "$ver_name" "$filename"
-            
-            echo "::endgroup::"
-          done <<< "$TO_BUILD"
+          # Run the actual compilation
+          bash ../scripts/guts-arm64ec.sh "$REF" "$VER_NAME" "$FILENAME"
+          
+          echo "::endgroup::"
 
       - name: Process Logs
         if: always()
         run: bash ./scripts/log.sh _logs/*.log || true
 
       - name: Release
-        if: steps.check.outputs.missing == 'true'
         env:
           REPO:           ${{ github.repository }}
           REL_TAG:        ${{ env.REL_TAG_STABLE }} 
           VERSION_PREFIX: "${{ env.UNI_KIND }}-"
           ARTIFACT_GLOB:  "out/${{ env.UNI_KIND }}-*.wcp"
         run: bash ./scripts/release.sh
-        
