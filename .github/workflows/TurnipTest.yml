@@ -13,7 +13,6 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          # Dependencies for building Mesa (and libdrm if needed)
           sudo apt-get install -y ninja-build bison flex python3-mako python3-pip libxml2-utils libelf-dev glslang-tools pkg-config
           sudo pip3 install meson
 
@@ -50,16 +49,15 @@ jobs:
           EOF
 
           # 2. Configure Meson
-          # - Removed 'platforms=android' to fix cutils error
-          # - Disabled LLVM to simplify build (Turnip uses ir3 compiler)
-          # - Cleared gallium-drivers to build ONLY Vulkan (Turnip)
+          # Added --force-fallback-for=libdrm to fix the missing dependency
           meson setup build-android \
             --cross-file android-aarch64 \
             -Dplatforms= \
             -Dgallium-drivers= \
             -Dvulkan-drivers=freedreno \
             -Dllvm=disabled \
-            -Dbuildtype=release
+            -Dbuildtype=release \
+            --force-fallback-for=libdrm
           
           # 3. Compile
           ninja -C build-android
