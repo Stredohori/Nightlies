@@ -13,9 +13,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          # Removed 'meson' from apt-get to avoid the old version
-          sudo apt-get install -y ninja-build bison flex python3-mako python3-pip libxml2-utils
-          # Install the latest Meson via pip
+          sudo apt-get install -y ninja-build bison flex python3-mako python3-pip libxml2-utils libelf-dev
           sudo pip3 install meson
 
       - name: Setup Android NDK
@@ -50,12 +48,11 @@ jobs:
           endian = 'little'
           EOF
 
-          # 2. Configure Meson
+          # 2. Configure Meson (Fixed: Removed android-stub)
           meson setup build-android \
             --cross-file android-aarch64 \
             -Dplatforms=android \
             -Dplatform-sdk-version=29 \
-            -Dandroid-stub=true \
             -Dgallium-drivers=freedreno \
             -Dvulkan-drivers=freedreno \
             -Dbuildtype=release
