@@ -310,7 +310,7 @@ jobs:
           path: '*.wcp'
 
   # ==================================================================
-  # JOB 5: Consolidated Release & Notify
+  # JOB 5: Consolidated Release & Notify (Keeps Last 5)
   # ==================================================================
   create-release:
     name: Create Nightly Release
@@ -325,25 +325,18 @@ jobs:
           path: ./artifacts
           merge-multiple: true
 
-      - name: Delete Old Nightly Tag
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git tag -d nightly || true
-          git push origin :refs/tags/nightly || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate Date Tag
+        run: echo "TAG_NAME=nightly-$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: nightly
-          name: "All-in-One Emulation Nightly"
+          tag_name: ${{ env.TAG_NAME }}
+          name: "Emulation Nightly: ${{ env.TAG_NAME }}"
           prerelease: false
           make_latest: true
           body: |
-            ### 🚀 All-in-One Nightly Build
-            This release contains the latest builds for Winlator/Android emulation.
+            ### 🚀 Nightly Build: ${{ env.TAG_NAME }}
             
             | Component | Version / Commit |
             | :--- | :--- |
@@ -357,8 +350,6 @@ jobs:
             2. **WOWBox64**: `WOWBox64-*.wcp`
             3. **FEXCore**: `FEX-*.wcp`
             4. **DXVK**: `dxvk-gplasync-*.wcp`
-            
-            _All files are packaged in `.wcp` format for easy installation in Winlator._
           files: ./artifacts/*.wcp
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -368,7 +359,21 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         with:
-          args: '🚀 **New Emulation Nightly Released!**\nBuilds for Box64, WOWBox64, FEX, and DXVK are ready.\n\n📥 **Download:** https://github.com/${{ github.repository }}/releases/tag/nightly'
+          args: '🚀 **New Emulation Nightly Released!**\nBuild: ${{ env.TAG_NAME }}\n\n📥 **Download:** https://github.com/${{ github.repository }}/releases/tag/${{ env.TAG_NAME }}'
+
+      - name: Cleanup Old Releases (Keep 5)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 1. List all releases starting with 'nightly-'
+          # 2. Sort them (newest first)
+          # 3. Skip the first 5
+          # 4. Delete the rest
+          gh release list --limit 30 --json tagName,createdAt \
+          | jq -r '.[] | select(.tagName | startswith("nightly-")) | .tagName' \
+          | sort -r \
+          | tail -n +6 \
+          | xargs -I {} -r gh release delete {} --cleanup-tag -y
 
   cleanup:
     name: Cleanup Artifacts
