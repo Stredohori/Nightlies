@@ -140,7 +140,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      commit: ${{ steps.version.outputs.commit }}
     steps:
       - name: Install Dependencies
         run: |
@@ -180,7 +179,6 @@ jobs:
           
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
           echo "version=${VERSION_NAME}" >> $GITHUB_OUTPUT
-          echo "commit=${COMMIT_HASH}" >> $GITHUB_OUTPUT
 
       - name: Build FEXCore
         run: |
@@ -312,7 +310,7 @@ jobs:
           path: '*.wcp'
 
   # ==================================================================
-  # JOB 5: Consolidated Release
+  # JOB 5: Consolidated Release & Notify
   # ==================================================================
   create-release:
     name: Create Nightly Release
@@ -364,6 +362,13 @@ jobs:
           files: ./artifacts/*.wcp
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Discord Notification
+        uses: ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: '🚀 **New Emulation Nightly Released!**\nBuilds for Box64, WOWBox64, FEX, and DXVK are ready.\n\n📥 **Download:** https://github.com/${{ github.repository }}/releases/tag/nightly'
 
   cleanup:
     name: Cleanup Artifacts
