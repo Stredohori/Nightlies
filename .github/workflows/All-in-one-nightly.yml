@@ -78,6 +78,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      # ADDED: Output commit hash so Discord can link it
+      commit: ${{ steps.version.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
 
@@ -110,6 +112,8 @@ jobs:
           FULL_V="$MAJOR.$MINOR.$REVISION-${COMMIT}-nightly"
           echo "FULL_VERSION=$FULL_V" >> $GITHUB_ENV
           echo "version=$FULL_V" >> $GITHUB_OUTPUT
+          # ADDED: Save commit to outputs
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
 
       - name: Configure and Build
         run: |
@@ -140,6 +144,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      commit: ${{ steps.version.outputs.commit }}
     steps:
       - name: Install Dependencies
         run: |
@@ -179,6 +184,8 @@ jobs:
           
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
           echo "version=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          # ADDED: Output commit hash for Discord
+          echo "commit=${COMMIT_HASH}" >> $GITHUB_OUTPUT
 
       - name: Build FEXCore
         run: |
@@ -350,6 +357,8 @@ jobs:
             2. **WOWBox64**: `WOWBox64-*.wcp`
             3. **FEXCore**: `FEX-*.wcp`
             4. **DXVK**: `dxvk-gplasync-*.wcp`
+            
+            _These files are packaged for use with Winlator._
           files: ./artifacts/*.wcp
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -359,16 +368,12 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         with:
-          args: '🚀 **New Emulation Nightly Released!**\nBuild: ${{ env.TAG_NAME }}\n\n📥 **Download:** https://github.com/${{ github.repository }}/releases/tag/${{ env.TAG_NAME }}'
+          args: '🚀 **New Emulation Nightly Released!**\nBuild: ${{ env.TAG_NAME }}\n\n🔗 **Source Commits:**\n• Box64: [${{ needs.build-box64.outputs.commit }}](https://github.com/ptitSeb/box64/commit/${{ needs.build-box64.outputs.commit }})\n• WOWBox64: [${{ needs.build-wowbox64.outputs.commit }}](https://github.com/ptitSeb/box64/commit/${{ needs.build-wowbox64.outputs.commit }})\n• FEXCore: [${{ needs.build-fex.outputs.commit }}](https://github.com/FEX-Emu/FEX/commit/${{ needs.build-fex.outputs.commit }})\n• DXVK: [${{ needs.build-dxvk.outputs.commit }}](https://github.com/doitsujin/dxvk/commit/${{ needs.build-dxvk.outputs.commit }})\n\n📥 **Download:** https://github.com/${{ github.repository }}/releases/tag/${{ env.TAG_NAME }}'
 
       - name: Cleanup Old Releases (Keep 5)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 1. List all releases starting with 'nightly-'
-          # 2. Sort them (newest first)
-          # 3. Skip the first 5
-          # 4. Delete the rest
           gh release list --limit 30 --json tagName,createdAt \
           | jq -r '.[] | select(.tagName | startswith("nightly-")) | .tagName' \
           | sort -r \
