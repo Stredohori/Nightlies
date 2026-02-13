@@ -1,5 +1,4 @@
 name: Build Box64 & WOWBox64 Nightly
-
 on:
   schedule:
     - cron: '0 9 * * *'
