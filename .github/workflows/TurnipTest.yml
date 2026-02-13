@@ -13,7 +13,8 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build bison flex python3-mako python3-pip libxml2-utils libelf-dev
+          # Added 'glslang-tools' to fix the missing executable error
+          sudo apt-get install -y ninja-build bison flex python3-mako python3-pip libxml2-utils libelf-dev glslang-tools pkg-config
           sudo pip3 install meson
 
       - name: Setup Android NDK
@@ -48,7 +49,7 @@ jobs:
           endian = 'little'
           EOF
 
-          # 2. Configure Meson (Fixed: Removed android-stub)
+          # 2. Configure Meson
           meson setup build-android \
             --cross-file android-aarch64 \
             -Dplatforms=android \
