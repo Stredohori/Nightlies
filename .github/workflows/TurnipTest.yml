@@ -13,7 +13,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          # Added 'glslang-tools' to fix the missing executable error
+          # Dependencies for building Mesa (and libdrm if needed)
           sudo apt-get install -y ninja-build bison flex python3-mako python3-pip libxml2-utils libelf-dev glslang-tools pkg-config
           sudo pip3 install meson
 
@@ -50,12 +50,15 @@ jobs:
           EOF
 
           # 2. Configure Meson
+          # - Removed 'platforms=android' to fix cutils error
+          # - Disabled LLVM to simplify build (Turnip uses ir3 compiler)
+          # - Cleared gallium-drivers to build ONLY Vulkan (Turnip)
           meson setup build-android \
             --cross-file android-aarch64 \
-            -Dplatforms=android \
-            -Dplatform-sdk-version=29 \
-            -Dgallium-drivers=freedreno \
+            -Dplatforms= \
+            -Dgallium-drivers= \
             -Dvulkan-drivers=freedreno \
+            -Dllvm=disabled \
             -Dbuildtype=release
           
           # 3. Compile
