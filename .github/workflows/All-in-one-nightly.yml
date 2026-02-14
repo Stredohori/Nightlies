@@ -621,13 +621,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Discord Notification
-        uses: ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: '🚀 **New Emulation Nightly Released!**\nBuild: ${{ env.TAG_NAME }}\n\n🔗 **Source Commits:**\n• Box64: [${{ needs.build-box64.outputs.commit }}](https://github.com/ptitSeb/box64/commit/${{ needs.build-box64.outputs.commit }})\n• WOWBox64: [${{ needs.build-wowbox64.outputs.commit }}](https://github.com/ptitSeb/box64/commit/${{ needs.build-wowbox64.outputs.commit }})\n• FEXCore: [${{ needs.build-fex.outputs.commit }}](https://github.com/FEX-Emu/FEX/commit/${{ needs.build-fex.outputs.commit }})\n• VKD3D (Std): [${{ needs.build-vkd3d.outputs.commit }}](https://github.com/HansKristian-Work/vkd3d-proton/commit/${{ needs.build-vkd3d.outputs.commit }})\n• VKD3D (ARM64EC): [${{ needs.build-vkd3d-arm64ec.outputs.commit }}](https://github.com/HansKristian-Work/vkd3d-proton/commit/${{ needs.build-vkd3d-arm64ec.outputs.commit }})\n• DXVK: [${{ needs.build-dxvk.outputs.commit }}](https://github.com/doitsujin/dxvk/commit/${{ needs.build-dxvk.outputs.commit }})\n\n📥 **Download:** https://github.com/${{ github.repository }}/releases/tag/${{ env.TAG_NAME }}'
-
       - name: Cleanup Old Releases (Keep 5)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
